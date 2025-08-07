@@ -5,13 +5,13 @@ import (
 	"net/http"
 )
 
-func handlerHealth(w http.ResponseWriter, r *http.Request) {
+func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
-func handlerApp(path string) http.Handler {
+func appHandler(path string) http.Handler {
 	return http.StripPrefix("/app", http.FileServer(http.Dir(path)))
 }
 
@@ -25,8 +25,8 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/app/", mw(handlerApp(rootFilepath)))
-	mux.Handle("GET /health", mw(http.HandlerFunc(handlerHealth)))
+	mux.Handle("/app/", mw(appHandler(rootFilepath)))
+	mux.Handle("GET /health", mw(http.HandlerFunc(healthHandler)))
 	mux.Handle("GET /metrics", cfg.HandlerMetrics())
 	mux.Handle("POST /reset", cfg.HandlerReset())
 
