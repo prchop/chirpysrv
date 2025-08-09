@@ -25,12 +25,15 @@ func main() {
 		return cfg.MiddlewareMetricsInc(h)
 	}
 
+	// User endpoint
 	mux.Handle("/app/", mw(appHandler(rootFilepath)))
 
 	// API endpoint
 	mux.Handle("GET /api/health", mw(http.HandlerFunc(healthHandler)))
-	mux.Handle("GET /api/metrics", cfg.HandlerMetrics())
-	mux.Handle("POST /api/reset", cfg.HandlerReset())
+
+	// Admin endpoint
+	mux.Handle("GET /admin/metrics", cfg.HandlerMetrics())
+	mux.Handle("POST /admin/reset", cfg.HandlerReset())
 
 	srv := &http.Server{Addr: ":" + port, Handler: mux}
 
