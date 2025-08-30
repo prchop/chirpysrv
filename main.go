@@ -1,11 +1,48 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
+	"github.com/prchop/chirpysrv/internal/database"
 )
+
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func userHandler(cfg *apiConfig) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		var u User
+		defer r.Body.Close()
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&u); err != nil {
+			log.Printf("error decoding: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		dbUser, err := cfg.db.CreateUser(r.Context(), u.Email)
+		if err != nil {
+			log.Printf("error creating user: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+		}
+
+		responseWithJSON(w, http.StatusCreated, dbUser)
+	}
+	return http.HandlerFunc(h)
+}
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -33,7 +70,7 @@ func validateHandler(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&params); err != nil {
-		log.Print(err)
+		log.Printf("error decoding: %v", err)
 		responseWithError(w, http.StatusBadRequest, "Something went wrong")
 		// responseWithError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -66,7 +103,7 @@ func validateHandler(w http.ResponseWriter, r *http.Request) {
 func responseWithJSON(w http.ResponseWriter, code int, payload any) {
 	resp, err := json.Marshal(payload)
 	if err != nil {
-		log.Print(err)
+		log.Printf("error marshaling: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"error":"Something went wrong"}`))
 		// w.Write([]byte(`{"error":"Internal server error"}`))
@@ -87,8 +124,18 @@ func responseWithError(w http.ResponseWriter, code int, msg string) {
 func main() {
 	port := "8080"
 	rootFilepath := "."
-	cfg := NewAPIConfig()
 	mux := http.NewServeMux()
+
+	dbURI := os.Getenv("GOOSE_DBSTRING")
+	dbDriver := os.Getenv("GOOSE_DRIVER")
+	db, err := sql.Open(dbDriver, dbURI)
+	if err != nil {
+		log.Print(err)
+	}
+
+	dbQueries := database.New(db)
+	cfg := NewAPIConfig(dbQueries)
+	// cfg = &apiConfig{fsrvHits: atomic.Int32{}, db: dbQueries}
 
 	mw := func(h http.Handler) http.Handler {
 		return cfg.MiddlewareMetricsInc(h)
@@ -100,6 +147,7 @@ func main() {
 	// API endpoint
 	mux.Handle("GET /api/health", mw(http.HandlerFunc(healthHandler)))
 	mux.Handle("POST /api/validate_chirp", mw(http.HandlerFunc(validateHandler)))
+	mux.Handle("POST /api/users", mw(userHandler(cfg)))
 
 	// Admin endpoint
 	mux.Handle("GET /admin/metrics", cfg.HandlerMetrics())
