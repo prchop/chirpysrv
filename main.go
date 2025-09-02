@@ -212,6 +212,43 @@ func updateChirpHandler(cfg *apiConfig) http.Handler {
 	return http.HandlerFunc(h)
 }
 
+func getUsersHandler(cfg *apiConfig) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		users, err := cfg.db.GetUsers(r.Context())
+		if err != nil {
+			log.Printf("error getting chirps: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		responseWithJSON(w, http.StatusOK, users)
+	}
+
+	return http.HandlerFunc(h)
+}
+
+func getUserByIDHandler(cfg *apiConfig) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		userID, err := uuid.Parse(r.PathValue("id"))
+		if err != nil {
+			log.Printf("error parsing chirp id: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		user, err := cfg.db.GetUserByID(r.Context(), userID)
+		if err != nil {
+			log.Printf("error getting chirp: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		responseWithJSON(w, http.StatusOK, user)
+	}
+
+	return http.HandlerFunc(h)
+}
+
 func responseWithJSON(w http.ResponseWriter, code int, payload any) {
 	resp, err := json.Marshal(payload)
 	if err != nil {
@@ -256,6 +293,9 @@ func main() {
 
 	// API endpoint
 	mux.Handle("GET /api/health", mw(http.HandlerFunc(healthHandler)))
+
+	mux.Handle("GET /api/users", mw(getUsersHandler(cfg)))
+	mux.Handle("GET /api/users/{id}", mw(getUserByIDHandler(cfg)))
 
 	mux.Handle("POST /api/chirps", mw(chirpHandler(cfg)))
 	mux.Handle("POST /api/users", mw(userHandler(cfg)))
