@@ -18,5 +18,10 @@ SELECT id, body, updated_at, created_at, user_id
 FROM chirps
 WHERE id = $1;
 
+-- name: DeleteChirpByID :one
+DELETE FROM chirps
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteAllChirps :exec
 DELETE FROM chirps;
