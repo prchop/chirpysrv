@@ -17,7 +17,7 @@
   </form>
   <script>
     const initialJson = {
-      body: "Example body",
+      email: "testemail@example.test",
     };
 
     // Populate the textarea with formatted JSON
@@ -39,7 +39,7 @@
         return;
       }
 
-      const res = await fetch("/api/validate_chirp", {
+      const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(jsonData),
