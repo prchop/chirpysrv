@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -42,6 +43,76 @@ DELETE FROM chirps
 func (q *Queries) DeleteAllChirps(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteAllChirps)
 	return err
+}
+
+const getChirpByID = `-- name: GetChirpByID :one
+SELECT id, body, updated_at, created_at, user_id
+FROM chirps
+WHERE id = $1
+`
+
+type GetChirpByIDRow struct {
+	ID        uuid.UUID
+	Body      string
+	UpdatedAt time.Time
+	CreatedAt time.Time
+	UserID    uuid.UUID
+}
+
+func (q *Queries) GetChirpByID(ctx context.Context, id uuid.UUID) (GetChirpByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getChirpByID, id)
+	var i GetChirpByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Body,
+		&i.UpdatedAt,
+		&i.CreatedAt,
+		&i.UserID,
+	)
+	return i, err
+}
+
+const getChirps = `-- name: GetChirps :many
+SELECT id, body, updated_at, created_at, user_id
+FROM chirps
+ORDER BY id
+`
+
+type GetChirpsRow struct {
+	ID        uuid.UUID
+	Body      string
+	UpdatedAt time.Time
+	CreatedAt time.Time
+	UserID    uuid.UUID
+}
+
+func (q *Queries) GetChirps(ctx context.Context) ([]GetChirpsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getChirps)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetChirpsRow
+	for rows.Next() {
+		var i GetChirpsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Body,
+			&i.UpdatedAt,
+			&i.CreatedAt,
+			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateChirp = `-- name: UpdateChirp :one

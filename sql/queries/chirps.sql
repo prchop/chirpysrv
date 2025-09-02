@@ -8,5 +8,15 @@ UPDATE chirps SET (updated_at, body) = (NOW(), $1)
 WHERE id = $2
 RETURNING *;
 
+-- name: GetChirps :many
+SELECT id, body, updated_at, created_at, user_id
+FROM chirps
+ORDER BY id;
+
+-- name: GetChirpByID :one
+SELECT id, body, updated_at, created_at, user_id
+FROM chirps
+WHERE id = $1;
+
 -- name: DeleteAllChirps :exec
 DELETE FROM chirps;
