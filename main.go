@@ -310,6 +310,30 @@ func getChripByIDHandler(cfg *apiConfig) http.Handler {
 	return http.HandlerFunc(h)
 }
 
+func deleteChirpByID(cfg *apiConfig) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		chirpID, err := uuid.Parse(r.PathValue("id"))
+		if err != nil {
+			log.Printf("error parsing user id: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		deletedChirp, err := cfg.db.DeleteChirpByID(r.Context(), chirpID)
+		if err != nil {
+			log.Printf("error deleting user: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		responseWithJSON(w, http.StatusOK, struct {
+			DeletedChrip database.Chirp `json:"deleted_chrip"`
+		}{DeletedChrip: deletedChirp})
+	}
+
+	return http.HandlerFunc(h)
+}
+
 func responseWithJSON(w http.ResponseWriter, code int, payload any) {
 	resp, err := json.Marshal(payload)
 	if err != nil {
@@ -368,6 +392,8 @@ func main() {
 	mux.Handle("PATCH /api/chirps/{id}", mw(updateChirpHandler(cfg)))
 
 	mux.Handle("DELETE /api/users/{id}", mw(deleteUserByID(cfg)))
+	mux.Handle("DELETE /api/chirps/{id}", mw(deleteChirpByID(cfg)))
+
 	// Admin endpoint
 	mux.Handle("GET /admin/metrics", cfg.HandlerMetrics())
 	mux.Handle("POST /admin/reset", cfg.HandlerReset())
