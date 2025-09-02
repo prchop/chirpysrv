@@ -1,5 +1,5 @@
 -- +goose Up
-CREATE TABLE chrips (
+CREATE TABLE chirps (
   id UUID PRIMARY KEY,
   created_at TIMESTAMP NOT NULL,
   updated_at TIMESTAMP NOT NULL,
@@ -8,4 +8,4 @@ CREATE TABLE chrips (
 );
 
 -- +goose Down
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS chirps;

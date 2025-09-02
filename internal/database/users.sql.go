@@ -12,7 +12,7 @@ import (
 )
 
 const createChirp = `-- name: CreateChirp :one
-INSERT INTO chrips (id, created_at, updated_at, body, user_id)
+INSERT INTO chirps (id, created_at, updated_at, body, user_id)
 VALUES (gen_random_uuid(), NOW(), NOW(), $1, $2)
 RETURNING id, created_at, updated_at, body, user_id
 `
@@ -22,9 +22,9 @@ type CreateChirpParams struct {
 	UserID uuid.UUID
 }
 
-func (q *Queries) CreateChirp(ctx context.Context, arg CreateChirpParams) (Chrip, error) {
+func (q *Queries) CreateChirp(ctx context.Context, arg CreateChirpParams) (Chirp, error) {
 	row := q.db.QueryRowContext(ctx, createChirp, arg.Body, arg.UserID)
-	var i Chrip
+	var i Chirp
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -63,7 +63,7 @@ func (q *Queries) DeleteAllUsers(ctx context.Context) error {
 }
 
 const updateChirp = `-- name: UpdateChirp :one
-UPDATE chrips SET (updated_at, body) = (NOW(), $1)
+UPDATE chirps SET (updated_at, body) = (NOW(), $1)
 WHERE id = $2
 RETURNING id, created_at, updated_at, body, user_id
 `
@@ -73,9 +73,9 @@ type UpdateChirpParams struct {
 	ID   uuid.UUID
 }
 
-func (q *Queries) UpdateChirp(ctx context.Context, arg UpdateChirpParams) (Chrip, error) {
+func (q *Queries) UpdateChirp(ctx context.Context, arg UpdateChirpParams) (Chirp, error) {
 	row := q.db.QueryRowContext(ctx, updateChirp, arg.Body, arg.ID)
-	var i Chrip
+	var i Chirp
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
