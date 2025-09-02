@@ -8,5 +8,15 @@ UPDATE users SET (updated_at, email) = (NOW(), $1)
 WHERE id = $2
 RETURNING *;
 
+-- name: GetUsers :many
+SELECT id, email, updated_at, created_at
+FROM users
+ORDER BY id;
+
+-- name: GetUserByID :one
+SELECT id, email, updated_at, created_at
+FROM users
+WHERE id = $1;
+
 -- name: DeleteAllUsers :exec
 DELETE FROM users;
