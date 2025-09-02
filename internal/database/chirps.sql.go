@@ -94,7 +94,7 @@ func (q *Queries) GetChirpByID(ctx context.Context, id uuid.UUID) (GetChirpByIDR
 const getChirps = `-- name: GetChirps :many
 SELECT id, body, updated_at, created_at, user_id
 FROM chirps
-ORDER BY id
+ORDER BY user_id ASC
 `
 
 type GetChirpsRow struct {
