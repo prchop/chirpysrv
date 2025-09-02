@@ -249,6 +249,43 @@ func getUserByIDHandler(cfg *apiConfig) http.Handler {
 	return http.HandlerFunc(h)
 }
 
+func getChirpsHandler(cfg *apiConfig) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		chirps, err := cfg.db.GetChirps(r.Context())
+		if err != nil {
+			log.Printf("error getting chirps: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		responseWithJSON(w, http.StatusOK, chirps)
+	}
+
+	return http.HandlerFunc(h)
+}
+
+func getChripByIDHandler(cfg *apiConfig) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		chirpID, err := uuid.Parse(r.PathValue("id"))
+		if err != nil {
+			log.Printf("error parsing chirp id: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		chirp, err := cfg.db.GetChirpByID(r.Context(), chirpID)
+		if err != nil {
+			log.Printf("error getting chirp: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		responseWithJSON(w, http.StatusOK, chirp)
+	}
+
+	return http.HandlerFunc(h)
+}
+
 func responseWithJSON(w http.ResponseWriter, code int, payload any) {
 	resp, err := json.Marshal(payload)
 	if err != nil {
@@ -296,6 +333,9 @@ func main() {
 
 	mux.Handle("GET /api/users", mw(getUsersHandler(cfg)))
 	mux.Handle("GET /api/users/{id}", mw(getUserByIDHandler(cfg)))
+
+	mux.Handle("GET /api/chirps", mw(getChirpsHandler(cfg)))
+	mux.Handle("GET /api/chirps/{id}", mw(getChripByIDHandler(cfg)))
 
 	mux.Handle("POST /api/chirps", mw(chirpHandler(cfg)))
 	mux.Handle("POST /api/users", mw(userHandler(cfg)))
