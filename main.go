@@ -7,16 +7,19 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"github.com/prchop/chirpysrv/internal/auth"
 	"github.com/prchop/chirpysrv/internal/database"
 )
 
 func userHandler(cfg *apiConfig) http.Handler {
 	h := func(w http.ResponseWriter, r *http.Request) {
 		type CreateUserRequest struct {
-			Email string `json:"email"`
+			Password string `json:"password,omitempty"`
+			Email    string `json:"email,omitempty"`
 		}
 
 		var params CreateUserRequest
@@ -30,7 +33,23 @@ func userHandler(cfg *apiConfig) http.Handler {
 			return
 		}
 
-		dbUser, err := cfg.db.CreateUser(r.Context(), params.Email)
+		if len(params.Password) == 0 || len(params.Email) == 0 {
+			responseWithError(w, http.StatusBadRequest, "Empty field")
+			return
+		}
+
+		password, err := auth.HashPassword(params.Password)
+		if err != nil {
+			log.Printf("error hashing password params: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		dbUser, err := cfg.db.CreateUser(r.Context(),
+			database.CreateUserParams{
+				Email:          params.Email,
+				HashedPassword: password,
+			})
 		if err != nil {
 			log.Printf("error creating user: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
@@ -38,6 +57,58 @@ func userHandler(cfg *apiConfig) http.Handler {
 		}
 
 		responseWithJSON(w, http.StatusCreated, dbUser)
+	}
+	return http.HandlerFunc(h)
+}
+
+func userLoginHandler(cfg *apiConfig) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		type userLoginRequest struct {
+			Password string `json:"password,omitempty"`
+			Email    string `json:"email,omitempty"`
+		}
+
+		var params userLoginRequest
+		defer r.Body.Close()
+
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&params); err != nil {
+			log.Printf("error decoding: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		user, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
+		if err != nil {
+			log.Printf("error getting user: %v", err)
+			responseWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+			return
+		}
+
+		if err := auth.CheckPasswordHash(params.Password, user.HashedPassword); err != nil {
+			log.Printf("error checking password: %v", err)
+			responseWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+			return
+		}
+
+		type userLoginResponse struct {
+			ID        uuid.UUID `json:"id"`
+			CreatedAt time.Time `json:"created_at"`
+			UpdatedAt time.Time `json:"updated_at"`
+			Email     string    `json:"email"`
+		}
+
+		response := func(user database.User) userLoginResponse {
+			return userLoginResponse{
+				ID:        user.ID,
+				CreatedAt: user.CreatedAt,
+				UpdatedAt: user.UpdatedAt,
+				Email:     user.Email,
+			}
+		}
+
+		responseWithJSON(w, http.StatusOK, response(user))
 	}
 	return http.HandlerFunc(h)
 }
@@ -385,8 +456,9 @@ func main() {
 	mux.Handle("GET /api/chirps", mw(getChirpsHandler(cfg)))
 	mux.Handle("GET /api/chirps/{id}", mw(getChripByIDHandler(cfg)))
 
-	mux.Handle("POST /api/chirps", mw(chirpHandler(cfg)))
 	mux.Handle("POST /api/users", mw(userHandler(cfg)))
+	mux.Handle("POST /api/login", mw(userLoginHandler(cfg)))
+	mux.Handle("POST /api/chirps", mw(chirpHandler(cfg)))
 
 	mux.Handle("PATCH /api/users/{id}", mw(updateUserHandler(cfg)))
 	mux.Handle("PATCH /api/chirps/{id}", mw(updateChirpHandler(cfg)))
