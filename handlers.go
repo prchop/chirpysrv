@@ -23,8 +23,9 @@ func appHandler(path string) http.Handler {
 }
 
 type UserRequest struct {
-	Password string `json:"password,omitempty"`
-	Email    string `json:"email,omitempty"`
+	Password  string `json:"password,omitempty"`
+	Email     string `json:"email,omitempty"`
+	ExpiresIn int    `json:"expires_in_seconds"`
 }
 
 type UserResponse struct {
@@ -34,12 +35,24 @@ type UserResponse struct {
 	Email     string    `json:"email"`
 }
 
+type AuthResponse struct {
+	UserResponse
+	Token string `json:"token"`
+}
+
 func newUserResponse(user database.User) UserResponse {
 	return UserResponse{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
+	}
+}
+
+func newAuthResponse(user UserResponse, token string) AuthResponse {
+	return AuthResponse{
+		UserResponse: user,
+		Token:        token,
 	}
 }
 
@@ -98,6 +111,10 @@ func userLoginHandler(cfg *apiConfig) http.Handler {
 			return
 		}
 
+		if params.ExpiresIn == 0 || params.ExpiresIn > 3600 {
+			params.ExpiresIn = 3600
+		}
+
 		dbUser, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 		if err != nil {
 			log.Printf("error getting user: %v", err)
@@ -111,8 +128,17 @@ func userLoginHandler(cfg *apiConfig) http.Handler {
 			return
 		}
 
+		token, err := auth.MakeJWT(dbUser.ID, cfg.secret, time.Duration(params.ExpiresIn)*time.Second)
+		if err != nil {
+			log.Printf("error creating token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
 		loggedInUser := newUserResponse(dbUser)
-		responseWithJSON(w, http.StatusOK, loggedInUser)
+		userWithAuth := newAuthResponse(loggedInUser, token)
+
+		responseWithJSON(w, http.StatusOK, userWithAuth)
 	})
 }
 
@@ -238,6 +264,7 @@ func newChirpResponse(chirp database.Chirp) ChirpResponse {
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
 		Body:      chirp.Body,
+		UserID:    chirp.UserID,
 	}
 }
 
@@ -255,6 +282,25 @@ func chirpHandler(cfg *apiConfig) http.Handler {
 		if err := dec.Decode(&params); err != nil {
 			log.Printf("error decoding: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			log.Printf("error getting token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		validID, err := auth.ValidateJWT(token, cfg.secret)
+		if err != nil {
+			log.Printf("error validating token: %v", err)
+			responseWithError(w, http.StatusUnauthorized, "Something went wrong")
+			return
+		}
+
+		if params.UserID != validID {
+			responseWithError(w, http.StatusForbidden, "Forbidden")
 			return
 		}
 

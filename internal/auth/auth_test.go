@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -118,6 +119,38 @@ func TestCheckValidateError(t *testing.T) {
 			_, err := auth.ValidateJWT(tt.token, tt.secret)
 			if err.Error() != tt.wantErr.Error() {
 				t.Fatalf(`got: %q, want: %q`, err.Error(), tt.wantErr.Error())
+			}
+		})
+	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers http.Header
+		want    string
+		wantErr bool
+	}{
+		{"valid bearer token 1", http.Header{"Authorization": []string{"Bearer token12345"}}, "token12345", false},
+		{"valid bearer token 2", http.Header{"Authorization": []string{"Bearer token54321"}}, "token54321", false},
+		{"empty token", http.Header{"Authorization": []string{"Bearer "}}, "", true},
+		{"authorization header not found", http.Header{"Authorization": []string{""}}, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := auth.GetBearerToken(tt.headers)
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tt.want {
+					t.Fatalf("got: %v, want: %v", got, tt.want)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("want error but got none")
+				}
 			}
 		})
 	}

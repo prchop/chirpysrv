@@ -11,13 +11,14 @@ import (
 )
 
 type apiConfig struct {
-	fsrvHits atomic.Int32
-	db       *database.Queries
+	srvHits atomic.Int32
+	db      *database.Queries
+	secret  string
 }
 
 func (cfg *apiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
 	h := func(w http.ResponseWriter, r *http.Request) {
-		cfg.fsrvHits.Add(1)
+		cfg.srvHits.Add(1)
 		next.ServeHTTP(w, r)
 	}
 	return http.HandlerFunc(h)
@@ -25,7 +26,7 @@ func (cfg *apiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
 
 func (cfg *apiConfig) HandlerMetrics() http.Handler {
 	h := func(w http.ResponseWriter, r *http.Request) {
-		result := cfg.fsrvHits.Load()
+		result := cfg.srvHits.Load()
 		html := fmt.Sprintf("<html><body><h1>Welcome, Chirpy Admin</h1><p>Chirpy has been visited %d times!</p></body></html>", result)
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -46,7 +47,7 @@ func (cfg *apiConfig) HandlerReset() http.Handler {
 		}
 
 		// reset metrics
-		cfg.fsrvHits.Store(0)
+		cfg.srvHits.Store(0)
 
 		// delete all users
 		if err := cfg.db.DeleteAllUsers(r.Context()); err != nil {
@@ -63,5 +64,5 @@ func (cfg *apiConfig) HandlerReset() http.Handler {
 }
 
 func NewAPIConfig(db *database.Queries) *apiConfig {
-	return &apiConfig{fsrvHits: atomic.Int32{}, db: db}
+	return &apiConfig{srvHits: atomic.Int32{}, db: db}
 }

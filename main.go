@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync/atomic"
 
 	_ "github.com/lib/pq"
 	"github.com/prchop/chirpysrv/internal/database"
@@ -14,6 +15,7 @@ func main() {
 	port := ":8080"
 	rootFilepath := "."
 	mux := http.NewServeMux()
+	secret := os.Getenv("JWT_SECRET")
 
 	dbURI := os.Getenv("GOOSE_DBSTRING")
 	dbDriver := os.Getenv("GOOSE_DRIVER")
@@ -23,7 +25,12 @@ func main() {
 	}
 
 	dbQueries := database.New(db)
-	cfg := NewAPIConfig(dbQueries)
+
+	cfg := &apiConfig{
+		srvHits: atomic.Int32{},
+		db:      dbQueries,
+		secret:  secret,
+	}
 
 	mw := func(h http.Handler) http.Handler {
 		return cfg.MiddlewareMetricsInc(h)
