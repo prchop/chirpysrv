@@ -20,6 +20,16 @@ WHERE id = $1;
 SELECT * FROM users
 WHERE email = $1;
 
+-- name: GetUserByRefreshToken :one
+SELECT * FROM users
+WHERE id = (
+  SELECT user_id
+  FROM refresh_tokens
+  WHERE token = $1
+    AND expires_at > NOW()
+    AND revoked_at IS NULL
+);
+
 -- name: DeleteUserByID :one
 DELETE FROM users
 WHERE id = $1
