@@ -155,3 +155,25 @@ func TestGetBearerToken(t *testing.T) {
 		})
 	}
 }
+
+func TestMakeRefreshToken(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{"valid refresh token 1"},
+		{"valid refresh token 2"},
+		{"valid refresh token 3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := auth.MakeRefreshToken()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != 64 {
+				t.Fatalf("expected length 32, got: %d", len(got))
+			}
+		})
+	}
+}

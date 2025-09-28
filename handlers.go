@@ -22,10 +22,59 @@ func appHandler(path string) http.Handler {
 	return http.StripPrefix("/app", http.FileServer(http.Dir(path)))
 }
 
+func refreshHandler(cfg *apiConfig) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reftoken, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			log.Printf("error retrieving refresh token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		dbUser, err := cfg.db.GetUserByRefreshToken(r.Context(), reftoken)
+		if err != nil {
+			log.Printf("error retrieving user with refresh token: %v", err)
+			responseWithError(w, http.StatusUnauthorized, "Token didn't exist or already expired")
+			return
+		}
+
+		token, err := auth.MakeJWT(dbUser.ID, cfg.secret, time.Hour)
+		if err != nil {
+			log.Printf("error generating access token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		responseWithJSON(w, http.StatusOK, struct {
+			Token string `json:"token"`
+		}{
+			Token: token,
+		})
+	})
+}
+
+func revokeHandler(cfg *apiConfig) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reftoken, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			log.Printf("error retrieving refresh token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		if _, err = cfg.db.RevokeRefreshToken(r.Context(), reftoken); err != nil {
+			log.Printf("error revoking refresh token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Token didn't exist or already revoked")
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
 type UserRequest struct {
-	Password  string `json:"password,omitempty"`
-	Email     string `json:"email,omitempty"`
-	ExpiresIn int    `json:"expires_in_seconds"`
+	Password string `json:"password,omitempty"`
+	Email    string `json:"email,omitempty"`
 }
 
 type UserResponse struct {
@@ -33,11 +82,6 @@ type UserResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
-}
-
-type AuthResponse struct {
-	UserResponse
-	Token string `json:"token"`
 }
 
 func newUserResponse(user database.User) UserResponse {
@@ -49,10 +93,17 @@ func newUserResponse(user database.User) UserResponse {
 	}
 }
 
-func newAuthResponse(user UserResponse, token string) AuthResponse {
+type AuthResponse struct {
+	UserResponse
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+func newAuthResponse(user UserResponse, token, reftoken string) AuthResponse {
 	return AuthResponse{
 		UserResponse: user,
 		Token:        token,
+		RefreshToken: reftoken,
 	}
 }
 
@@ -88,7 +139,7 @@ func userHandler(cfg *apiConfig) http.Handler {
 			},
 		)
 		if err != nil {
-			log.Printf("error creating user: %v", err)
+			log.Printf("error generating user: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
@@ -111,32 +162,49 @@ func userLoginHandler(cfg *apiConfig) http.Handler {
 			return
 		}
 
-		if params.ExpiresIn == 0 || params.ExpiresIn > 3600 {
-			params.ExpiresIn = 3600
-		}
-
 		dbUser, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 		if err != nil {
-			log.Printf("error getting user: %v", err)
+			log.Printf("error retrieving user: %v", err)
 			responseWithError(w, http.StatusUnauthorized, "Incorrect email or password")
 			return
 		}
 
-		if err := auth.CheckPasswordHash(params.Password, dbUser.HashedPassword); err != nil {
+		if err = auth.CheckPasswordHash(params.Password, dbUser.HashedPassword); err != nil {
 			log.Printf("error checking password: %v", err)
 			responseWithError(w, http.StatusUnauthorized, "Incorrect email or password")
 			return
 		}
 
-		token, err := auth.MakeJWT(dbUser.ID, cfg.secret, time.Duration(params.ExpiresIn)*time.Second)
+		// token should expire after 1 hour
+		token, err := auth.MakeJWT(dbUser.ID, cfg.secret, time.Hour)
 		if err != nil {
-			log.Printf("error creating token: %v", err)
+			log.Printf("error generating access token: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
 
+		reftoken, err := auth.MakeRefreshToken()
+		if err != nil {
+			log.Printf("error generating refresh token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		dbRefToken, err := cfg.db.CreateRefreshToken(
+			r.Context(),
+			database.CreateRefreshTokenParams{
+				Token:     reftoken,
+				UserID:    dbUser.ID,
+				ExpiresAt: time.Now().AddDate(0, 0, 60),
+			})
+		if err != nil {
+			log.Printf("error retrieving user: %v", err)
+			responseWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+			return
+		}
+
 		loggedInUser := newUserResponse(dbUser)
-		userWithAuth := newAuthResponse(loggedInUser, token)
+		userWithAuth := newAuthResponse(loggedInUser, token, dbRefToken.Token)
 
 		responseWithJSON(w, http.StatusOK, userWithAuth)
 	})
@@ -186,13 +254,12 @@ func getUsersHandler(cfg *apiConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dbUsers, err := cfg.db.GetUsers(r.Context())
 		if err != nil {
-			log.Printf("error getting chirps: %v", err)
+			log.Printf("error retrieving chirps: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
 
 		users := make([]UserResponse, len(dbUsers))
-
 		for i, u := range dbUsers {
 			users[i] = newUserResponse(u)
 		}
@@ -216,7 +283,7 @@ func getUserByIDHandler(cfg *apiConfig) http.Handler {
 
 		dbUser, err := cfg.db.GetUserByID(r.Context(), userID)
 		if err != nil {
-			log.Printf("error getting chirp: %v", err)
+			log.Printf("error retrieving chirp: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
@@ -287,7 +354,7 @@ func chirpHandler(cfg *apiConfig) http.Handler {
 
 		token, err := auth.GetBearerToken(r.Header)
 		if err != nil {
-			log.Printf("error getting token: %v", err)
+			log.Printf("error retrieving token: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
@@ -323,15 +390,14 @@ func chirpHandler(cfg *apiConfig) http.Handler {
 		}
 		str := strings.Join(spl, " ")
 
-		dbChirp, err := cfg.db.CreateChirp(
-			r.Context(),
+		dbChirp, err := cfg.db.CreateChirp(r.Context(),
 			database.CreateChirpParams{
 				Body:   str,
 				UserID: params.UserID,
 			},
 		)
 		if err != nil {
-			log.Printf("error creating chirps: %v", err)
+			log.Printf("error generating chirps: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
@@ -405,7 +471,7 @@ func getChirpsHandler(cfg *apiConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dbChirps, err := cfg.db.GetChirps(r.Context())
 		if err != nil {
-			log.Printf("error getting chirps: %v", err)
+			log.Printf("error retrieving chirps: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
@@ -434,7 +500,7 @@ func getChripByIDHandler(cfg *apiConfig) http.Handler {
 
 		dbChirp, err := cfg.db.GetChirpByID(r.Context(), chirpID)
 		if err != nil {
-			log.Printf("error getting chirp: %v", err)
+			log.Printf("error retrieving chirp: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}

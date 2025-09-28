@@ -49,6 +49,8 @@ func main() {
 	mux.Handle("POST /api/users", mw(userHandler(cfg)))
 	mux.Handle("POST /api/login", mw(userLoginHandler(cfg)))
 	mux.Handle("POST /api/chirps", mw(chirpHandler(cfg)))
+	mux.Handle("POST /api/refresh", mw(refreshHandler(cfg)))
+	mux.Handle("POST /api/revoke", mw(revokeHandler(cfg)))
 
 	mux.Handle("PATCH /api/users/{id}", mw(updateUserHandler(cfg)))
 	mux.Handle("PATCH /api/chirps/{id}", mw(updateChirpHandler(cfg)))
