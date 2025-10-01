@@ -77,5 +77,9 @@ func NewApp(cfg Config) (*App, error) {
 	}
 	queries := database.New(db)
 
-	return &App{db: queries, srvHits: atomic.Int32{}, config: cfg}, nil
+	return &App{
+		db:      queries,
+		srvHits: atomic.Int32{},
+		config:  cfg,
+	}, nil
 }
