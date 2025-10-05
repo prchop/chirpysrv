@@ -47,11 +47,11 @@ func main() {
 	mux.Handle("POST /api/refresh", mw(refreshHandler(app)))
 	mux.Handle("POST /api/revoke", mw(revokeHandler(app)))
 
-	mux.Handle("PATCH /api/users/{id}", mw(updateUserHandler(app)))
+	mux.Handle("PUT /api/users", mw(updateUserHandler(app)))
 	mux.Handle("PATCH /api/chirps/{id}", mw(updateChirpHandler(app)))
 
 	mux.Handle("DELETE /api/users/{id}", mw(deleteUserByID(app)))
-	mux.Handle("DELETE /api/chirps/{id}", mw(deleteChirpByID(app)))
+	mux.Handle("DELETE /api/chirps/{chirpID}", mw(deleteChirpByID(app)))
 
 	mux.Handle("GET /admin/metrics", app.HandlerMetrics())
 	mux.Handle("POST /admin/reset", app.HandlerReset())

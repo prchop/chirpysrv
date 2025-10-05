@@ -239,7 +239,8 @@ func userLoginHandler(app *App) http.Handler {
 func updateUserHandler(app *App) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		type requestUpdateUser struct {
-			Email string `json:"email" required:"true"`
+			Password string `json:"password" required:"true"`
+			Email    string `json:"email" required:"true"`
 		}
 		var params requestUpdateUser
 		defer r.Body.Close()
@@ -258,22 +259,40 @@ func updateUserHandler(app *App) http.Handler {
 			return
 		}
 
-		parsedID, err := uuid.Parse(r.PathValue("id"))
+		token, err := auth.GetBearerToken(r.Header)
 		if err != nil {
 			log.Printf("error parsing: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
 
-		dbUser, err := app.db.UpdateUser(r.Context(),
-			database.UpdateUserParams{
-				Email: params.Email,
-				ID:    parsedID,
-			},
-		)
+		validID, err := auth.ValidateJWT(token, app.config.JWTSecret)
+		if err != nil {
+			log.Printf("error checking token: %v", err)
+			responseWithError(w, http.StatusUnauthorized, "The provided token is invalid or missing")
+			return
+		}
+
+		password, err := auth.HashPassword(params.Password)
+		if err != nil {
+			responseWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+			return
+		}
+
+		dbUser, err := app.db.UpdateUser(r.Context(), database.UpdateUserParams{
+			Email:          params.Email,
+			HashedPassword: password,
+			ID:             validID,
+		})
 		if err != nil {
 			log.Printf("error updating user: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		if err = auth.CheckPasswordHash(params.Password, dbUser.HashedPassword); err != nil {
+			log.Printf("error checking password: %v", err)
+			responseWithError(w, http.StatusUnauthorized, "Incorrect email or password")
 			return
 		}
 
@@ -544,25 +563,46 @@ func getChripByIDHandler(app *App) http.Handler {
 
 func deleteChirpByID(app *App) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		chirpID, err := uuid.Parse(r.PathValue("id"))
+		chirpID, err := uuid.Parse(r.PathValue("chirpID"))
 		if err != nil {
 			log.Printf("error parsing user id: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
 
-		dbChirp, err := app.db.DeleteChirpByID(r.Context(), chirpID)
+		token, err := auth.GetBearerToken(r.Header)
 		if err != nil {
-			log.Printf("error deleting user: %v", err)
+			log.Printf("error retrieving token: %v", err)
 			responseWithError(w, http.StatusBadRequest, "Something went wrong")
 			return
 		}
 
-		responseWithJSON(w, http.StatusOK, struct {
-			DeletedChrip ChirpResponse `json:"deleted_chrip"`
-		}{
-			DeletedChrip: newChirpResponse(dbChirp),
-		})
+		validID, err := auth.ValidateJWT(token, app.config.JWTSecret)
+		if err != nil {
+			log.Printf("error validating token: %v", err)
+			responseWithError(w, http.StatusBadRequest, "Something went wrong")
+			return
+		}
+
+		dbChirp, err := app.db.GetChirpByID(r.Context(), chirpID)
+		if err != nil {
+			log.Printf("error retrieving user: %v", err)
+			responseWithError(w, http.StatusNotFound, "Not found")
+			return
+		}
+
+		if dbChirp.UserID != validID {
+			responseWithError(w, http.StatusForbidden, "Forbidden")
+			return
+		}
+
+		if _, err = app.db.DeleteChirpByID(r.Context(), dbChirp.ID); err != nil {
+			log.Printf("error deleting user: %v", err)
+			responseWithError(w, http.StatusNotFound, "Not found")
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	})
 }
 
