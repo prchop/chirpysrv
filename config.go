@@ -16,6 +16,7 @@ type Config struct {
 	DBURI     string `env:"DB_URI"`
 	Platform  string `env:"PLATFORM"`
 	JWTSecret string `env:"JWT_SECRET"`
+	PolkaKey  string `env:"POLKA_KEY"`
 }
 
 type App struct {
