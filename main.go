@@ -46,6 +46,7 @@ func main() {
 	mux.Handle("POST /api/chirps", mw(chirpHandler(app)))
 	mux.Handle("POST /api/refresh", mw(refreshHandler(app)))
 	mux.Handle("POST /api/revoke", mw(revokeHandler(app)))
+	mux.Handle("POST /api/polka/webhooks", mw(upgradeUserHandler(app)))
 
 	mux.Handle("PUT /api/users", mw(updateUserHandler(app)))
 	mux.Handle("PATCH /api/chirps/{id}", mw(updateChirpHandler(app)))
