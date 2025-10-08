@@ -389,12 +389,24 @@ func upgradeUserHandler(app *App) http.Handler {
 			return
 		}
 
+		key, err := auth.GetAPIKey(r.Header)
+		if err != nil {
+			log.Printf("error retrieving api key: %v", err)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if key != app.config.PolkaKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
 		if params.Event != "user.upgrade" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		_, err := app.db.UpgradeUser(r.Context(), database.UpgradeUserParams{
+		_, err = app.db.UpgradeUser(r.Context(), database.UpgradeUserParams{
 			IsChirpyRed: true,
 			ID:          params.Data.UserID,
 		})
