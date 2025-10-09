@@ -9,34 +9,33 @@
 
 #### Endpoints
 
-* `GET /app/` →  a simple interface to send JSON request body to `/api/users` endpoint.
+* `GET /app/` →  a simple html serve.
 * `GET /api/health` →  checking the health of API.
 * `GET /api/users` →  Retrieve all users.
-* `GET /api/chirps` →  Retrieve all chirps.
 * `GET /api/users/{id}` →  Retrieve users by ID.
-* `GET /api/chirps/{id}` →  Retrieve chirps by ID.
-* `POST /api/users` →  Create a new user with a JSON request body (e.g., email).
-* `POST /api/chirps` →  Create a new user with a JSON request body (e.g., body, user_id).
-* `PATCH /api/users/{id}` →  Update partial user data.
+* `GET /api/chirps` →  Retrieve all chirps, filter chirp using `author_id=<user_id>` query param, and sort by asc (default) or desc by passing `sort=asc|desc` query param.
+* `GET /api/chirps/{id}` →  Retrieve chirp by chrip ID.
+* `POST /api/login` →  Login with email and password. Generate an accdess token (exp. 1 hours) and refresh token (exp. 60 days).
+* `POST /api/users` →  Create a new user with a JSON request body (e.g., email, password).
+* `POST /api/chirps` →  Create a new chirp with a JSON request body (e.g., body, user_id) and require a valid access token in Authorization Header.
+* `POST /api/refresh` →  Refresh access token.
+* `POST /api/revoke` →  Revoke refresh token.
+* `POST /api/polka/webhooks` →  Upgrade user subscription.
+* `PUT /api/users` →  Idempotent update user data.
 * `PATCH /api/chirps/{id}` →  Update partial chrip data.
 * `DELETE /api/users/{id}` →  Delete user by ID.
-* `DELETE /api/chrips/{id}` →  Delete user by ID.
-* `POST /admin/metrics` →  Show the user metrics count.
+* `DELETE /api/chrips/{chirpID}` →  Delete chirp by ID.
+* `GET /admin/metrics` →  Show the user metrics count.
 * `POST /admin/reset` →  Reset the metrics count and delete all users.
 
 #### Tech Stack
 
 * [Go](https://pkg.go.dev/net/http) (`net/http`)
 * [PostgreSQL](https://www.postgresql.org/)
+* [Goose](https://pressly.github.io/goose/)
 * [SQLC](https://docs.sqlc.dev/en/latest/index.html)
 
 #### Run the App
-
-```bash
-make
-```
-
-or
 
 ```
 go build -o <name> && ./<name>
