@@ -3,51 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Chirpy</title>
     <link rel="icon" type="image/png" href="assets/chirpy-logo.png">
   </head>
   <body>
-    <h1>Welcome to Chirpy</h1>
+    <h1>Welcome to Chirpy Server</h1>
+
+    <p>
+      This project is intended as an example of basic REST API learning with Go, not for live production.
+    </p>
   </body>
-  <form id="myForm">
-    <label for="jsonData">JSON Data:</label><br />
-    <textarea id="jsonData" name="jsonData" rows="10" cols="50"></textarea
-    ><br />
-    <button type="submit">Submit</button>
-  </form>
-  <script>
-    const initialJson = {
-      email: "testemail@example.test",
-    };
-
-    // Populate the textarea with formatted JSON
-    document.getElementById("jsonData").value = JSON.stringify(
-      initialJson,
-      null,
-      2,
-    );
-
-    // Handle submit event
-    document.getElementById("myForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      let jsonData;
-      try {
-        jsonData = JSON.parse(document.getElementById("jsonData").value);
-      } catch (err) {
-        alert("Invalid JSON: " + err.message);
-        return;
-      }
-
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(jsonData),
-      });
-
-      if (!res.ok) {
-        alert(`Server error: ${res.status}`);
-      }
-    });
-  </script>
 </html>
